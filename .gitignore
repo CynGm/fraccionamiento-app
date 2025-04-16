@@ -1,0 +1,12 @@
+# Carpetas a ignorar
+env/
+__pycache__/
+.vscode/
+
+# Archivos de bases de datos
+*.db
+
+# Archivos de sistema o cachés
+*.pyc
+*.log
+
