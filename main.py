@@ -3,6 +3,9 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Residente, Visita
 from schemas import VisitaSchema, ResidenteSchema
+from utils import generar_qr_residente
+from fastapi.responses import FileResponse
+
 
 app = FastAPI()
 
@@ -46,4 +49,14 @@ def registrar_visita(visita: VisitaSchema, db: Session = Depends(get_db)):
     db.refresh(nueva_visita)
 
     return {"mensaje": "Visita registrada exitosamente"}
+
+
+@app.get("/generar-qr/{residente_id}")
+def generar_qr(residente_id: int, db: Session = Depends(get_db)):
+    residente = db.query(Residente).filter(Residente.id == residente_id).first()
+    if not residente:
+        raise HTTPException(status_code=404, detail="Residente no encontrado")
+
+    ruta_qr = generar_qr_residente(residente_id)
+    return FileResponse(ruta_qr, media_type="image/png", filename=f"residente_{residente_id}.png")
 
