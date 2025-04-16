@@ -1,14 +1,14 @@
 import qrcode
 import os
 
-def generar_qr_residente(id_residente: int):
-    contenido = f"residente_id:{id_residente}"
-    qr = qrcode.make(contenido)
+def generar_qr_residente(residente_id: int):
+    datos = f"ID del residente: {residente_id}"
+    qr = qrcode.make(datos)
 
-    ruta_carpeta = "qr_residentes"
-    os.makedirs(ruta_carpeta, exist_ok=True)
+    carpeta = "qr_residentes"
+    if not os.path.exists(carpeta):
+        os.makedirs(carpeta)
 
-    ruta_archivo = os.path.join(ruta_carpeta, f"residente_{id_residente}.png")
-    qr.save(ruta_archivo)
-
-    return ruta_archivo
+    filename = os.path.join(carpeta, f"qr_residente_{residente_id}.png")
+    qr.save(filename)
+    return filename

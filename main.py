@@ -5,38 +5,22 @@ from models import Residente, Visita
 from schemas import VisitaSchema, ResidenteSchema
 from utils import generar_qr_residente
 from fastapi.responses import FileResponse
+from schemas import ResidenteSchema, VisitaSchema, ResidenteCreate
 
 
 app = FastAPI()
 
-# -------------------------------
+# --------------------------------------
 # ENDPOINT: Inicio
-# -------------------------------
+# --------------------------------------
 @app.get("/")
 def inicio():
     return {"mensaje": "¡Servidor corriendo correctamente!"}
 
 
-# -------------------------------
-# ENDPOINT: Registrar Residente
-# -------------------------------
-@app.post("/registrar-residente")
-def registrar_residente(residente: ResidenteSchema, db: Session = Depends(get_db)):
-    db_residente = db.query(Residente).filter(Residente.correo == residente.correo).first()
-    if db_residente:
-        raise HTTPException(status_code=400, detail="Este correo ya está registrado.")
-
-    nuevo_residente = Residente(**residente.dict())
-    db.add(nuevo_residente)
-    db.commit()
-    db.refresh(nuevo_residente)
-
-    return {"mensaje": "Residente registrado exitosamente"}
-
-
-# -------------------------------
-# ENDPOINT: Registrar Visita
-# -------------------------------
+# --------------------------------------
+# ENDPOINT: Registrar visita
+# --------------------------------------
 @app.post("/registrar-visita")
 def registrar_visita(visita: VisitaSchema, db: Session = Depends(get_db)):
     residente = db.query(Residente).filter(Residente.id == visita.residente_id).first()
@@ -51,12 +35,34 @@ def registrar_visita(visita: VisitaSchema, db: Session = Depends(get_db)):
     return {"mensaje": "Visita registrada exitosamente"}
 
 
+# --------------------------------------
+# ENDPOINT: Generar QR para residente
+# --------------------------------------
 @app.get("/generar-qr/{residente_id}")
-def generar_qr(residente_id: int, db: Session = Depends(get_db)):
+def qr_residente(residente_id: int, db: Session = Depends(get_db)):
     residente = db.query(Residente).filter(Residente.id == residente_id).first()
     if not residente:
         raise HTTPException(status_code=404, detail="Residente no encontrado")
 
-    ruta_qr = generar_qr_residente(residente_id)
-    return FileResponse(ruta_qr, media_type="image/png", filename=f"residente_{residente_id}.png")
+    ruta_qr = generar_qr_residente(residente)
+    return FileResponse(ruta_qr, media_type="image/png", filename="qr_residente.png")
+
+# -----------------------------------------------
+# ✅ ENDPOINT: Crear residente
+# -----------------------------------------------
+@app.post("/crear-residente")
+def crear_residente(residente: ResidenteCreate, db: Session = Depends(get_db)):
+    nuevo = Residente(**residente.dict())
+    db.add(nuevo)
+    db.commit()
+    db.refresh(nuevo)
+
+    # 🔽 Generar el QR una vez que se tiene el ID del nuevo residente
+    generar_qr_residente(nuevo.id)
+
+    return {
+        "mensaje": "Residente creado correctamente",
+        "id": nuevo.id,
+        "nombre": nuevo.nombre
+    }
 

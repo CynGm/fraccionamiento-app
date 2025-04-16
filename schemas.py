@@ -30,3 +30,9 @@ class ResidenteSchema(BaseModel):
     "from_attributes": True
 }
 
+class ResidenteCreate(BaseModel):
+    nombre: str
+    domicilio: str
+    telefono: str
+    correo: str
+
