@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine 
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 
 # Ruta a la base de datos SQLite
@@ -22,3 +22,8 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# ✅ Crear las tablas si no existen (importa los modelos necesarios)
+def crear_tablas():
+    from models import Residente, Visita, Auto, Persona, Adeudo
+    Base.metadata.create_all(bind=engine)

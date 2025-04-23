@@ -1,42 +1,40 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends 
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from fastapi.responses import FileResponse, HTMLResponse
-import os
-import base64
 
-from database import get_db
+from database import get_db, crear_tablas
 from models import Residente, Visita
-from schemas import VisitaSchema, ResidenteSchema, ResidenteCreate
-from utils import generar_qr_residente
+from schemas import (
+    ResidenteCreate,
+    ResidenteSchema,
+    VisitaEntrada,
+    VisitaSalida,
+    VisitaOut
+)
+from utils import generar_qr_residente, descargar_qr
+from routes import residentes  # 👈 nuevo: rutas externas
 
+# Inicializa la app
 app = FastAPI()
 
-# ---------------------------------------------
-# ENDPOINT: Inicio
-# ---------------------------------------------
+# 🔧 Crear tablas automáticamente al iniciar
+crear_tablas()
+
+# 🔗 Agregar router de residentes
+app.include_router(residentes.router)
+
+
+# --------------------------------------------------------
+# ✅ ENDPOINT: Inicio
+# --------------------------------------------------------
 @app.get("/")
 def inicio():
     return {"mensaje": "¡Servidor corriendo correctamente!"}
 
 
-# ---------------------------------------------
-# ENDPOINT: Registrar visita
-# ---------------------------------------------
-@app.post("/registrar-visita")
-def registrar_visita(visita: VisitaSchema, db: Session = Depends(get_db)):
-    nueva_visita = Visita(**visita.dict())
-    db.add(nueva_visita)
-    db.commit()
-    db.refresh(nueva_visita)
-    return {
-        "mensaje": "Visita registrada correctamente",
-        "id": nueva_visita.id
-    }
-
-
-# ---------------------------------------------
-# ENDPOINT: Crear residente
-# ---------------------------------------------
+# --------------------------------------------------------
+# ✅ ENDPOINT: Crear residente simple (modo anterior)
+# --------------------------------------------------------
 @app.post("/crear-residente")
 def crear_residente(residente: ResidenteCreate, db: Session = Depends(get_db)):
     nuevo = Residente(**residente.dict())
@@ -44,7 +42,6 @@ def crear_residente(residente: ResidenteCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(nuevo)
 
-    # Generar el QR una vez que se tiene el ID del nuevo residente
     generar_qr_residente(nuevo.id)
 
     return {
@@ -54,43 +51,64 @@ def crear_residente(residente: ResidenteCreate, db: Session = Depends(get_db)):
     }
 
 
-# ---------------------------------------------
-# ENDPOINT: Ver QR en navegador
-# ---------------------------------------------
-@app.get("/ver-qr/{residente_id}", response_class=HTMLResponse)
-def ver_qr_residente(residente_id: int):
-    ruta_qr = f"qr_residentes/qr_residente_{residente_id}.png"
-    if not os.path.exists(ruta_qr):
-        raise HTTPException(status_code=404, detail="QR no encontrado")
-
-    with open(ruta_qr, "rb") as image_file:
-        encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
-
-    html = f"""
-    <html>
-        <body>
-            <h3>QR del residente {residente_id}</h3>
-            <img src="data:image/png;base64,{encoded_string}" alt="QR Code" />
-            <br><br>
-            <a href="/descargar-qr/{residente_id}" download>
-                <button>Descargar QR</button>
-            </a>
-        </body>
-    </html>
-    """
-    return HTMLResponse(content=html)
+# --------------------------------------------------------
+# ✅ ENDPOINT: Generar QR manualmente
+# --------------------------------------------------------
+@app.get("/generar-qr/{residente_id}")
+def generar_qr(residente_id: int):
+    generar_qr_residente(residente_id)
+    return {"mensaje": f"QR del residente {residente_id} generado correctamente."}
 
 
-# ---------------------------------------------
-# ENDPOINT: Descargar QR directamente
-# ---------------------------------------------
+# --------------------------------------------------------
+# ✅ ENDPOINT: Descargar QR
+# --------------------------------------------------------
 @app.get("/descargar-qr/{residente_id}")
-def descargar_qr(residente_id: int):
-    ruta_qr = f"qr_residentes/qr_residente_{residente_id}.png"
-    if not os.path.exists(ruta_qr):
-        raise HTTPException(status_code=404, detail="QR no encontrado")
-    return FileResponse(
-        ruta_qr,
-        media_type="image/png",
-        filename=f"qr_residente_{residente_id}.png"
-    )
+def descargar_qr_residente(residente_id: int):
+    return descargar_qr(residente_id)
+
+
+# --------------------------------------------------------
+# ✅ ENDPOINT: Registrar visita
+# --------------------------------------------------------
+@app.post("/registrar-visita")
+def registrar_visita(visita: VisitaEntrada, db: Session = Depends(get_db)):
+    nueva_visita = Visita(**visita.dict())
+    db.add(nueva_visita)
+    db.commit()
+    db.refresh(nueva_visita)
+
+    return {
+        "mensaje": "Visita registrada correctamente",
+        "visitante": nueva_visita.nombre_visitante,
+        "residente_id": nueva_visita.residente_id,
+        "visita_id": nueva_visita.id
+    }
+
+
+# --------------------------------------------------------
+# ✅ ENDPOINT: Salida de visita
+# --------------------------------------------------------
+@app.put("/salida-visita/{visita_id}")
+def salida_visita(visita_id: int, datos_salida: VisitaSalida, db: Session = Depends(get_db)):
+    visita = db.query(Visita).filter(Visita.id == visita_id).first()
+    if not visita:
+        return {"error": "Visita no encontrada"}
+
+    visita.hora_salida = datos_salida.hora_salida
+    db.commit()
+
+    return {
+        "mensaje": "Hora de salida registrada correctamente",
+        "id": visita.id,
+        "hora_salida": str(visita.hora_salida)
+    }
+
+
+# --------------------------------------------------------
+# ✅ ENDPOINT: Ver historial de visitas
+# --------------------------------------------------------
+@app.get("/visitas", response_model=list[VisitaOut])
+def obtener_visitas(db: Session = Depends(get_db)):
+    visitas = db.query(Visita).all()
+    return visitas

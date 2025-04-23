@@ -1,33 +1,28 @@
 import qrcode
-import base64
-from io import BytesIO
 import os
+from fastapi.responses import FileResponse
+from fastapi import HTTPException
 
-def generar_qr_residente(residente_id: int) -> str:
-    # Contenido del QR
-    data = f"residente_{residente_id}"
-    
-    # Crear el QR
-    qr = qrcode.make(data)
-    
-    # Guardar imagen en memoria para codificarla en base64
-    buffer = BytesIO()
-    qr.save(buffer, format="PNG")
-    buffer.seek(0)
+CARPETA_QR = "qr_residentes"
 
-    # Crear carpeta si no existe
-    ruta_directorio = "qr_residentes"
-    os.makedirs(ruta_directorio, exist_ok=True)
+if not os.path.exists(CARPETA_QR):
+    os.makedirs(CARPETA_QR)
 
-    # Ruta para guardar archivo físico
-    ruta_archivo = os.path.join(ruta_directorio, f"qr_residente_{residente_id}.png")
-    with open(ruta_archivo, "wb") as f:
-        f.write(buffer.getvalue())
+def generar_qr_residente(residente_id: int):
+    datos = f"ID del residente: {residente_id}"
+    qr = qrcode.make(datos)
+    nombre_archivo = f"qr_residente_{residente_id}.png"
+    ruta_archivo = os.path.join(CARPETA_QR, nombre_archivo)
+    qr.save(ruta_archivo)
 
-    # Codificar imagen como base64
-    imagen_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-    
-    return imagen_base64
+def descargar_qr(residente_id: int):
+    nombre_archivo = f"qr_residente_{residente_id}.png"
+    ruta_archivo = os.path.join(CARPETA_QR, nombre_archivo)
 
+    if not os.path.exists(ruta_archivo):
+        raise HTTPException(status_code=404, detail="QR no encontrado para este residente.")
 
-
+    return FileResponse(
+        path=ruta_archivo,
+        media_type="image/png"
+    )
